@@ -1,6 +1,48 @@
 import React, { useState } from "react";
 import { Container, Row, Col, Form, Button, Card } from "react-bootstrap";
 
+const mockassesments = [
+    {
+        id: 1,
+        question:
+            "Are you seeking a Parent Company marker in order to discharge a Legal, Regulatory or Fiduciary responsibility on behalf of BT?",
+        name: "legalResponsibility",
+        type: "radio",
+        options: ["Yes", "No"]
+    },
+    {
+        id: 2,
+        question:
+            "Are you seeking a Parent Company marker in order to access Openreach Commercial Information (CI) or Customer Confidential Information (CCI)?",
+        name: "accessConfidentialInfo",
+        type: "radio",
+        options: ["Yes", "No"]
+    },
+    {
+        id: 3,
+        question:
+            "Please provide details to support your application including specific information on your Parent Company role responsibilities.",
+        name: "additionalDetails",
+        type: "textarea"
+    },
+    {
+        id: 4,
+        question:
+            "Are you seeking a Parent Company marker in order to access systems?",
+        name: "accessSystem",
+        type: "radio",
+        options: ["Yes", "No"]
+    },
+    {
+        id: 5,
+        question:
+            "Have you applied to be in this Parent Company role to undertake a short term assignment or project?",
+        name: "shortTermAssignment",
+        type: "radio",
+        options: ["Yes", "No"]
+    }
+];
+
 const ApplyForMarker = () => {
     const [formData, setFormData] = useState({
         applyMarker: "",
@@ -10,14 +52,16 @@ const ApplyForMarker = () => {
         accessConfidentialInfo: false,
         additionalDetails: "",
         accessSystem: false,
-        shortTermAssignment: false,
+        shortTermAssignment: false
     });
+
+    const [showQuestions, setShowQuestions] = useState(false); // Control visibility of questions
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
         setFormData((prev) => ({
             ...prev,
-            [name]: type === "checkbox" ? checked : value,
+            [name]: type === "checkbox" ? checked : value
         }));
     };
 
@@ -27,8 +71,11 @@ const ApplyForMarker = () => {
         alert("Form submitted successfully!");
     };
 
-    return (
+    const handleProceed = () => {
+        setShowQuestions(true); // Show questions when "Proceed" is clicked
+    };
 
+    return (
         <Container fluid className="py-4">
             <div className="bg-light">
                 <Row className="mb-4">
@@ -50,7 +97,6 @@ const ApplyForMarker = () => {
                         </div>
                     </Col>
                 </Row>
-
 
                 {/* Type and Marker Section */}
                 <Row className="mb-4">
@@ -75,161 +121,66 @@ const ApplyForMarker = () => {
                         </Form.Select>
                     </Col>
                     <Col md={2} className="d-flex justify-content-start">
-                        <Button variant="dark" className="w-100">
+                        <Button variant="dark" className="w-100" onClick={handleProceed}>
                             Proceed
                         </Button>
                     </Col>
                 </Row>
 
                 {/* Questions Section */}
-                <Card className="p-4 border">
-                    <Form onSubmit={handleSubmit}>
-                        {/* Question 1 */}
-                        <div style={{ textAlign: 'start' }}>
-                            <Form.Group className="mb-4 p-3 border bg-light">
-                                <Form.Label>
-                                    1. Are you seeking a Parent Company marker in order to discharge a
-                                    Legal, Regulatory or Fiduciary responsibility on behalf of BT?
-                                </Form.Label>
-                                <div>
-                                    <Form.Check
-                                        inline
-                                        label="Yes"
-                                        name="legalResponsibility"
-                                        type="radio"
-                                        value={true}
-                                        checked={formData.legalResponsibility === true}
-                                        onChange={handleChange}
-                                    />
-                                    <Form.Check
-                                        inline
-                                        label="No"
-                                        name="legalResponsibility"
-                                        type="radio"
-                                        value={false}
-                                        checked={formData.legalResponsibility === false}
-                                        onChange={handleChange}
-                                    />
+                {showQuestions && (
+                    <Card className="p-4 border">
+                        <Form onSubmit={handleSubmit}>
+                            <div style={{ textAlign: "start" }}>
+                                {mockassesments.map((q) => (
+                                    <Form.Group
+                                        key={q.id}
+                                        className="mb-4 p-3 border bg-light"
+                                    >
+                                        <Form.Label>{q.id}. {q.question}</Form.Label>
+                                        {q.type === "radio" ? (
+                                            <div>
+                                                {q.options.map((option) => (
+                                                    <Form.Check
+                                                        inline
+                                                        key={option}
+                                                        label={option}
+                                                        name={q.name}
+                                                        type="radio"
+                                                        value={option === "Yes"}
+                                                        checked={
+                                                            formData[q.name] ===
+                                                            (option === "Yes")
+                                                        }
+                                                        onChange={handleChange}
+                                                    />
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <Form.Control
+                                                as="textarea"
+                                                rows={5}
+                                                name={q.name}
+                                                value={formData[q.name]}
+                                                onChange={handleChange}
+                                                placeholder="Enter details here..."
+                                            />
+                                        )}
+                                    </Form.Group>
+                                ))}
+
+                                {/* Submit Button */}
+                                <div className="d-flex justify-content-end">
+                                    <Button variant="dark" type="submit">
+                                        Submit
+                                    </Button>
                                 </div>
-                            </Form.Group>
-
-                            {/* Question 2 */}
-                            <Form.Group className="mb-4 p-3 border bg-light">
-                                <Form.Label>
-                                    2. Are you seeking a Parent Company marker in order to access
-                                    Openreach Commercial Information (CI) or Customer Confidential
-                                    Information (CCI)?
-                                </Form.Label>
-                                <div>
-                                    <Form.Check
-                                        inline
-                                        label="Yes"
-                                        name="accessConfidentialInfo"
-                                        type="radio"
-                                        value={true}
-                                        checked={formData.accessConfidentialInfo === true}
-                                        onChange={handleChange}
-                                    />
-                                    <Form.Check
-                                        inline
-                                        label="No"
-                                        name="accessConfidentialInfo"
-                                        type="radio"
-                                        value={false}
-                                        checked={formData.accessConfidentialInfo === false}
-                                        onChange={handleChange}
-                                    />
-                                </div>
-                            </Form.Group>
-
-                            {/* Question 3: Text Area */}
-                            <Form.Group className="mb-4 p-3 border bg-light">
-                                <Form.Label>
-                                    3. Please provide details to support your application including
-                                    specific information on your Parent Company role
-                                    responsibilities.
-                                </Form.Label>
-                                <Form.Control
-                                    as="textarea"
-                                    rows={5}
-                                    name="additionalDetails"
-                                    value={formData.additionalDetails}
-                                    onChange={handleChange}
-                                    placeholder="Enter details here..."
-                                />
-                                <Form.Text className="text-muted">
-                                    Max characters: 250
-                                </Form.Text>
-                            </Form.Group>
-
-                            {/* Question 4 */}
-                            <Form.Group className="mb-4 p-3 border bg-light">
-                                <Form.Label>
-                                    4. Are you seeking a Parent Company marker in order to access
-                                    systems?
-                                </Form.Label>
-                                <div>
-                                    <Form.Check
-                                        inline
-                                        label="Yes"
-                                        name="accessSystem"
-                                        type="radio"
-                                        value={true}
-                                        checked={formData.accessSystem === true}
-                                        onChange={handleChange}
-                                    />
-                                    <Form.Check
-                                        inline
-                                        label="No"
-                                        name="accessSystem"
-                                        type="radio"
-                                        value={false}
-                                        checked={formData.accessSystem === false}
-                                        onChange={handleChange}
-                                    />
-                                </div>
-                            </Form.Group>
-
-                            {/* Question 5 */}
-                            <Form.Group className="mb-4 p-3 border bg-light">
-                                <Form.Label>
-                                    5. Have you applied to be in this Parent Company role to undertake
-                                    a short term assignment or project?
-                                </Form.Label>
-                                <div>
-                                    <Form.Check
-                                        inline
-                                        label="Yes"
-                                        name="shortTermAssignment"
-                                        type="radio"
-                                        value={true}
-                                        checked={formData.shortTermAssignment === true}
-                                        onChange={handleChange}
-                                    />
-                                    <Form.Check
-                                        inline
-                                        label="No"
-                                        name="shortTermAssignment"
-                                        type="radio"
-                                        value={false}
-                                        checked={formData.shortTermAssignment === false}
-                                        onChange={handleChange}
-                                    />
-                                </div>
-                            </Form.Group>
-
-                            {/* Submit Button */}
-                            <div className="d-flex justify-content-end">
-                                <Button variant="dark" type="submit">
-                                    Submit
-                                </Button>
                             </div>
-                        </div>
-                    </Form>
-                </Card>
+                        </Form>
+                    </Card>
+                )}
             </div>
         </Container>
-    
     );
 };
 
