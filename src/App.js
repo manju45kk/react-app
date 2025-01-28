@@ -1,6 +1,6 @@
 import logo from './logo.svg';
 import './App.css';
-import Marker from './Marker';
+import Marker from './Components/Marker/Marker';
 
 function App() {
   return (

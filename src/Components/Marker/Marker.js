@@ -68,7 +68,7 @@ const ApplyForMarker = () => {
     const handleSubmit = (e) => {
         e.preventDefault();
         console.log("Form Data Submitted:", formData);
-        alert("Form submitted successfully!");
+        // alert("Form submitted successfully!");
     };
 
     const handleProceed = () => {
@@ -76,22 +76,24 @@ const ApplyForMarker = () => {
     };
 
     return (
-        <Container fluid className="py-4">
-            <div className="bg-light">
+        <Container fluid className="py-4 h-100 container-background">
+            <div>
                 <Row className="mb-4">
                     <Col md={12}>
                         <div className="d-flex justify-content-between align-items-center">
                             <h6 className="mb-0">Apply for marker</h6>
                             <Form.Group>
                                 <Form.Select
+                                   className="rounded-0"
                                     name="applyMarker"
                                     value={formData.applyMarker}
                                     onChange={handleChange}
                                     style={{ width: "250px" }}
                                 >
                                     <option value="">Select marker</option>
-                                    <option value="Option 1">Option 1</option>
-                                    <option value="Option 2">Option 2</option>
+                                    <option value="1">Apply Your Marker</option>
+                                    <option value="2">Leave Your Marker</option>
+                                    <option value="3">Extend Your Marker</option>
                                 </Form.Select>
                             </Form.Group>
                         </div>
@@ -100,8 +102,9 @@ const ApplyForMarker = () => {
 
                 {/* Type and Marker Section */}
                 <Row className="mb-4">
-                    <Col md={5}>
+                    <Col md={3}>
                         <Form.Select
+                         className="rounded-0"
                             name="type"
                             value={formData.type}
                             onChange={handleChange}
@@ -110,18 +113,20 @@ const ApplyForMarker = () => {
                             <option value="Child">Child</option>
                         </Form.Select>
                     </Col>
-                    <Col md={5}>
+                    <Col md={3}>
                         <Form.Select
                             name="marker"
+                             className="rounded-0"
                             value={formData.marker}
                             onChange={handleChange}
                         >
                             <option value="RCMS to LMS">RCMS to LMS</option>
                             <option value="LMS to RCMS">LMS to RCMS</option>
+                           
                         </Form.Select>
                     </Col>
                     <Col md={2} className="d-flex justify-content-start">
-                        <Button variant="dark" className="w-100" onClick={handleProceed}>
+                        <Button variant="dark" className="w-100 rounded-0" onClick={handleProceed}>
                             Proceed
                         </Button>
                     </Col>
@@ -129,7 +134,7 @@ const ApplyForMarker = () => {
 
                 {/* Questions Section */}
                 {showQuestions && (
-                    <Card className="p-4 border">
+                    <Card className="p-4 border rounded-0">
                         <Form onSubmit={handleSubmit}>
                             <div style={{ textAlign: "start" }}>
                                 {mockassesments.map((q) => (
@@ -171,7 +176,7 @@ const ApplyForMarker = () => {
 
                                 {/* Submit Button */}
                                 <div className="d-flex justify-content-end">
-                                    <Button variant="dark" type="submit">
+                                    <Button variant="dark" className="rounded-0" type="submit">
                                         Submit
                                     </Button>
                                 </div>
