@@ -1,0 +1,910 @@
+import {useNavigate, useParams} from "react-router-dom";
+import FormRenderer, {FormRendererProps} from "./FormRenderer";
+import {useState, useCallback} from "react";
+import templateServiceApi from "../../../api/service/templateServiceApi";
+import {message} from "antd";
+import {clearStorage, getAppId} from "../../../utils/Utils";
+import CommonLoader from "../commonLoader/CommonLoader";
+import ErrorComponent from "../Status/Error/ErrorStatus";
+import SuccessComponent from "../Status/Success/Success";
+import {IAssessment} from "../../../api/models/adminServiceApi-Interface";
+
+const noJoinFields = [
+  "passedToContactDetailsEin",
+  "profileOthersContactEin",
+  "suppliedCountries",
+];
+
+const FormRendererWrapper: React.FC<FormRendererProps> = props => {
+  const {templateId} = useParams<{templateId: string}>();
+  const navigate = useNavigate();
+
+  const {
+    onSubmit,
+    selectedTemplate,
+    toggleLoadingStatus,
+    handleSuccessResponse,
+    selectedMapId,
+    draftId,
+  } = props;
+
+  const [selectedFormTemplate, setSelectedFormTemplate] = useState(
+    selectedTemplate,
+  ) as any;
+  const [successResponse, setSuccessResponse] = useState({} as any);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [formSubmissionStatus, setFormSubmissionStatus] = useState<
+    boolean | null
+  >(null);
+  const [isFormSubmitted, setIsFormSubmitted] = useState<boolean>(false);
+
+  const handleSelectedFormTemplateChange = useCallback((data: any) => {
+    setSelectedFormTemplate(data);
+  }, []);
+
+  const handleLoadingStatus = useCallback((value: boolean) => {
+    setLoading(value);
+  }, []);
+
+  const handleFormSubmit = async (form: any, status = "") => {
+    const values = form.getFormState().values;
+    console.log("values", values);
+    try {
+      let values;
+      if (status == "draft") {
+        values = form.values as any;
+      } else {
+        values = (await form.submit()) as any;
+      }
+      debugger;
+      const attachments = JSON.parse(
+        localStorage.getItem("attachments") || "[]",
+      );
+      const subscribers = localStorage.getItem("subscribers");
+      const relatedItems = localStorage.getItem("relatedItems");
+
+      const contacts = localStorage.getItem("passedToContactDetailsEin");
+      const safeContacts =
+        contacts && contacts !== "undefined" ? contacts : "[]";
+      const passedToContactDetailsEin = JSON.parse(safeContacts);
+      const othercontacts = localStorage.getItem("profileOthersContactEin");
+      const othersafeContacts =
+        othercontacts && othercontacts !== "undefined" ? othercontacts : "[]";
+      const profileOthersContactEin = JSON.parse(othersafeContacts);
+      const suppliedCountries = JSON.parse(
+        localStorage.getItem("suppliedCountries") || "[]",
+      );
+      const suppliedEntities = JSON.parse(
+        localStorage.getItem("suppliedEntities") || "[]",
+      );
+
+      try {
+        setLoading(true);
+        if (toggleLoadingStatus) {
+          toggleLoadingStatus(true);
+        }
+
+        const responseArray: Array<{
+          controlName: string;
+          controlValue: any;
+          controlType?: string;
+        }> = Object.entries(values).map(([key, value]) => {
+          if (Array.isArray(value) && !noJoinFields.includes(key)) {
+            return {
+              controlName: key,
+              controlValue: value.join(", "),
+            };
+          }
+          return {
+            controlName: key,
+            controlValue:
+              value && typeof value === "object" && "ein" in value
+                ? (value as {ein: string}).ein
+                : value,
+          };
+        });
+
+        // Only add if not already present in responseArray
+        const extraFields = [
+          {
+            controlName: "passedToContactDetailsEin",
+            controlValue: passedToContactDetailsEin,
+            controlType: "multiselect",
+          },
+          {
+            controlName: "profileOthersContactEin",
+            controlValue: profileOthersContactEin,
+            controlType: "multiselect",
+          },
+          {
+            controlName: "suppliedCountries",
+            controlValue: suppliedCountries,
+            controlType: "multiselect",
+          },
+          {
+            controlName: "suppliedEntities",
+            controlValue: suppliedEntities,
+            controlType: "multiselect",
+          },
+        ];
+
+        let userId = "";
+        if (getAppId() === 5) {
+          responseArray.map(item => {
+            if (item.controlName === "issueOwner") {
+              userId = item.controlValue;
+            }
+          });
+        }
+
+        const responseBody = [...responseArray];
+        extraFields.forEach(field => {
+          if (
+            !responseArray.some(item => item.controlName === field.controlName)
+          ) {
+            responseBody.push(field);
+          }
+        });
+
+        console.log("responseBody", responseBody);
+
+        responseArray.push({
+          controlName: "suppliedEntities",
+          controlValue: suppliedEntities,
+          controlType: "multiselect",
+        });
+
+        const requestBody = {
+          name: selectedFormTemplate?.name,
+          userId: userId,
+          status: status || "open",
+          templateId: selectedFormTemplate.id,
+          description: selectedFormTemplate.description,
+          response: responseBody,
+          attachments: attachments,
+          subscribers: subscribers ? JSON.parse(subscribers) : [],
+          relatedItems: relatedItems ? JSON.parse(relatedItems) : [],
+          lobTemplateWorkflowMapId: selectedMapId, // need to change
+          workflow: {
+            metadataTemp: {
+              formAction: "FormCreate",
+            },
+          },
+        } as Partial<IAssessment>;
+
+        if (draftId) {
+          requestBody["id"] = draftId;
+        }
+        const response = await templateServiceApi.saveAssesment(requestBody);
+        if (response.status === "OK") {
+          const msg =
+            status == "draft"
+              ? "Draft request has been created successfully."
+              : "Form submitted successfully!";
+          message.success({
+            content: msg,
+            style: {textAlign: "right"},
+          });
+          setSuccessResponse(response.data);
+          handleSuccessResponse?.(response.data);
+          clearStorage();
+          if (status == "draft") {
+            navigate("/ratm/requests");
+          } else {
+            if (onSubmit) {
+              onSubmit(true);
+            }
+            if (setFormSubmissionStatus) {
+              setFormSubmissionStatus(true);
+            }
+          }
+        } else {
+          clearStorage();
+          throw new Error("Failed to submit form");
+        }
+      } catch (error) {
+        clearStorage();
+        message.error({
+          content: "Failed to submit form",
+          style: {textAlign: "right"},
+        });
+        if (onSubmit) {
+          onSubmit(false);
+        }
+        if (setFormSubmissionStatus) {
+          setFormSubmissionStatus(false);
+        }
+      } finally {
+        clearStorage();
+        setLoading(false);
+        if (toggleLoadingStatus) {
+          toggleLoadingStatus(false);
+        }
+        setIsFormSubmitted(true);
+      }
+    } catch {
+      message.error("Validation failed.");
+    }
+  };
+
+  if (loading) return <CommonLoader />;
+
+  if (!!templateId && isFormSubmitted && !formSubmissionStatus) {
+    return <ErrorComponent />;
+  } else {
+    if (formSubmissionStatus) {
+      return <SuccessComponent successResponse={successResponse} />;
+    }
+  }
+
+  return (
+    <FormRenderer
+      {...props}
+      templateId={templateId}
+      onSubmitForm={handleFormSubmit}
+      handleSelectedFormTemplateChange={handleSelectedFormTemplateChange}
+      handleLoadingStatus={handleLoadingStatus}
+    />
+  );
+};
+
+export default FormRendererWrapper;
+
+// @ts-nocheck
+import React, { useEffect, useState, memo, useRef } from "react";
+import { createForm, onFieldInputValueChange } from "@formily/core";
+import { createSchemaField, FormProvider } from "@formily/react";
+import ArrowLeft from "../../../assets/icons/leftIconArrow.svg";
+import ArrowRight from "../../../assets/icons/rightIconArrow.svg";
+import "./FormRenderer.less";
+import {
+  FormItem,
+  DatePicker,
+  Checkbox,
+  Cascader,
+  Editable,
+  Input,
+  NumberPicker,
+  Switch,
+  Password,
+  PreviewText,
+  Radio,
+  Reset,
+  Space,
+  Submit,
+  TimePicker,
+  Transfer,
+  TreeSelect,
+  Upload,
+  FormGrid,
+  FormLayout,
+  FormTab,
+  FormCollapse,
+  ArrayTable,
+  ArrayCards,
+  FormButtonGroup,
+} from "@formily/antd";
+import {
+  Text,
+  // LinkableTextDn,
+  // SearchEin,
+  // Search,
+} from "@designable/formily-antd";
+import {Button, Card, message, Rate, Select, Slider} from "antd";
+import SearchProfiles from "../CustomComponent/SearchProfiles/SearchProfiles";
+import SearchContacts from "../CustomComponent/MultipleContacts/Contacts";
+import CustomUploadFile from "../CustomComponent/UploadFiles/CustomUploadFile";
+import templateServiceApi from "../../../api/service/templateServiceApi";
+import CustomRelatedItems from "../CustomComponent/RelatedItems/CustomRelatedItems";
+import CustomActions from "../CustomComponent/CustomActions/CustomActions";
+import CustomCountryRestrictions from "../CustomComponent/CountryRestrictions/CustomCountryRestrictions";
+import CustomTaskActions from "../CustomComponent/TaskActions/CustomTaskActions";
+import CustomEntity from "../CustomComponent/Entity/CustomEntity";
+export interface FormRendererProps {
+  templateId?: string;
+  schema?: any;
+  initialValues?: Record<string, any>;
+  onSubmit?: (value: boolean) => void;
+  onBack?: () => void;
+  onFormChange?: (values: any) => void;
+  assessmentData?: Array<{
+    controlName: string;
+    controlValue: any;
+    controlType?: string;
+  }>;
+  selectedTemplate?: any;
+  toggleLoadingStatus?: (value: boolean) => void;
+  handleSuccessResponse?: (value: any) => void;
+  selectedMapId?: string;
+  onSubmitForm?: (form: any) => void;
+  handleSelectedFormTemplateChange?: (data: any) => void;
+  handleLoadingStatus?: (value: boolean) => void;
+  caseStatus?: string;
+  draftId?: string;
+  getFormData?: (form: any) => void;
+}
+
+// const Text: React.FC<{
+//   value?: string;
+//   content?: string;
+//   mode?: "normal" | "h1" | "h2" | "h3" | "p";
+// }> = ({value, mode, content, ...props}) => {
+//   const tagName = mode === "normal" || !mode ? "div" : mode;
+//   return React.createElement(tagName, props, value || content);
+// };
+
+const SchemaField = createSchemaField({
+  components: {
+    Space,
+    FormGrid,
+    FormLayout,
+    FormTab,
+    FormCollapse,
+    ArrayTable,
+    ArrayCards,
+    FormItem,
+    DatePicker,
+    Checkbox,
+    Cascader,
+    Editable,
+    Input,
+    Text,
+    // Search,
+    // LinkableTextDn,
+    // SearchEin,
+    NumberPicker,
+    Switch,
+    Password,
+    PreviewText,
+    Radio,
+    Reset,
+    Select,
+    Submit,
+    TimePicker,
+    Transfer,
+    TreeSelect,
+    Upload,
+    Card,
+    Slider,
+    Rate,
+    "search-profiles": SearchProfiles,
+    "search-contacts": SearchContacts,
+    "custom-upload": CustomUploadFile,
+    "custom-related": CustomRelatedItems,
+    "all-actions": CustomActions,
+    "custom-country-restrictions": CustomCountryRestrictions,
+    "custom-task-actions": CustomTaskActions,
+    "add-entity": CustomEntity,
+  },
+});
+
+const transformResponseToInitialValues = (
+  response?: Array<{
+    controlName: string;
+    controlValue: any;
+    controlType?: string;
+  }>,
+): Record<string, any> => {
+  if (!response) return {};
+  const initialValues: Record<string, any> = {};
+  response.forEach(item => {
+    initialValues[item.controlName] = item.controlValue;
+  });
+  return initialValues;
+};
+function getTodayDateStr() {
+  const today = new Date();
+  const day = String(today.getDate()).padStart(2, "0");
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const year = today.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+const FormRenderer: React.FC<FormRendererProps> = ({
+  templateId,
+  schema,
+  initialValues = {},
+  onBack,
+  onFormChange,
+  assessmentData,
+  onSubmitForm,
+  handleSelectedFormTemplateChange,
+  handleLoadingStatus,
+  caseStatus,
+  getFormData,
+}) => {
+  const [formSchema, setFormSchema] = useState(schema || null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const initialFormValues = transformResponseToInitialValues(assessmentData);
+  const mergedInitialValues = {...initialValues, ...initialFormValues};
+
+  if (!mergedInitialValues.disclosureDate) {
+    mergedInitialValues.disclosureDate = getTodayDateStr();
+  }
+  if (!mergedInitialValues.infoShareDate) {
+    mergedInitialValues.infoShareDate = getTodayDateStr();
+  }
+  if (!mergedInitialValues.descriptionInfoDate) {
+    mergedInitialValues.descriptionInfoDate = getTodayDateStr();
+  }
+
+  const form = React.useMemo(() => {
+    return createForm({
+      initialValues: mergedInitialValues,
+      effects: () => {
+        onFieldInputValueChange("*", (field: any) => {
+          if (field && field.value !== undefined) {
+            const changedValues = {
+              key: field.props.name,
+              value: field.value,
+            };
+            onFormChange?.(changedValues);
+            getFormData?.(form);
+          }
+        });
+      },
+    });
+  }, [JSON.stringify(mergedInitialValues)]);
+
+  React.useEffect(() => {
+    console.log(
+      "initialValues & initialFormValues",
+      initialValues,
+      initialFormValues,
+    );
+    form.setValues({...initialValues, ...initialFormValues});
+    getFormData?.(form);
+  }, [initialValues, initialFormValues, form]);
+
+  useEffect(() => {
+    if (!schema && !formSchema && templateId) {
+      const fetchFormSchema = async (templateId: string) => {
+        handleLoadingStatus?.(true);
+        try {
+          const result =
+            await templateServiceApi.getTemplateByTemplateId(templateId);
+          if (result?.status === "OK" && result?.data?.content) {
+            setFormSchema(result.data.content);
+
+            handleSelectedFormTemplateChange?.(result.data);
+          } else {
+            message.error("Failed to load private template schema");
+          }
+        } catch {
+          message.error("Failed to fetch template schema");
+        } finally {
+          handleLoadingStatus?.(false);
+        }
+      };
+      fetchFormSchema(templateId);
+    }
+  }, [templateId]);
+
+  useEffect(() => {
+    const handleDoubleClick = e => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const currentElement = ref.current;
+    if (currentElement) {
+      currentElement.addEventListener("dblclick", handleDoubleClick);
+    }
+
+    // Clean up
+    return () => {
+      if (currentElement) {
+        currentElement.removeEventListener("dblclick", handleDoubleClick);
+      }
+    };
+  }, []);
+
+  return (
+    <div className="formRenderContainer" ref={ref}>
+      <FormProvider form={form}>
+        <FormLayout layout="vertical">
+          <SchemaField schema={formSchema?.schema} />
+          {(caseStatus == "draft" || !assessmentData) && (
+            <FormButtonGroup align="right" style={{marginTop: 24}}>
+              <div className="button-group">
+                {!templateId && caseStatus != "draft" && (
+                  <Button
+                    onClick={onBack}
+                    className="back-button"
+                    icon={
+                      <img
+                        loading="lazy"
+                        src={ArrowLeft}
+                        alt="back"
+                        className="custom-icon"
+                      />
+                    }>
+                    Back
+                  </Button>
+                )}
+                <Button
+                  onClick={() => {
+                    onSubmitForm?.(form, "draft");
+                  }}
+                  className="back-button">
+                  Save as Draft
+                </Button>
+                <Button
+                  onClick={() => {
+                    onSubmitForm?.(form);
+                  }}
+                  className="submit-button">
+                  <div className="submit-button-container">
+                    <div>Submit</div>
+                    <div>
+                      <img
+                        loading="lazy"
+                        src={ArrowRight}
+                        alt="submit"
+                        className="custom-icon"
+                      />
+                    </div>
+                  </div>
+                </Button>
+              </div>
+            </FormButtonGroup>
+          )}
+        </FormLayout>
+      </FormProvider>
+    </div>
+  );
+};
+
+export default memo(FormRenderer);
+
+import {createForm} from "@formily/core";
+import {
+  FormProvider,
+  Field,
+  connect,
+  mapProps,
+  useFieldSchema,
+} from "@formily/react";
+import {Form} from "antd";
+import {useMemo} from "react";
+import CountryRestrictions from "./CountryRestrictions";
+
+// FormItem UI component
+const FormItem = connect(
+  Form.Item,
+  mapProps(
+    {
+      title: "label",
+      description: "extra",
+      required: true,
+      validateStatus: true,
+    },
+    (props, field: any) => {
+      return {
+        ...props,
+        help: field?.selfErrors?.length ? field?.selfErrors : undefined,
+      };
+    },
+  ),
+);
+
+export default () => {
+  const schema = useFieldSchema();
+  const form = useMemo(() => createForm({validateFirst: true}), []);
+  const CustomCountryRestrictions = () => (
+    <CountryRestrictions schema={schema} />
+  );
+
+  return (
+    <FormProvider form={form}>
+      <Form layout="vertical">
+        <Field
+          name="name"
+          title=""
+          required
+          decorator={[FormItem, {className: "margin-bottom-0"}]}
+          component={[CustomCountryRestrictions]}
+        />
+      </Form>
+    </FormProvider>
+  );
+};
+import {Button, Form, Select, Row, Col} from "antd";
+import MinusCircleOutlined from "../../../../assets/icons/minus-circled-outline-icon.svg";
+import PlusCircleOutlined from "../../../../assets/icons/puls-circled-outline-icon-light.svg";
+import "./CountryRestrictions.less";
+import {useEffect, useState} from "react";
+import {CountryOption} from "../../../../api/models/templateServiceApi-Interface";
+import {useWatch} from "antd/es/form/Form";
+
+const yesNoOptions = [
+  {label: "Yes", value: "Yes"},
+  {label: "No", value: "No"},
+];
+
+// Detect page type
+const getPageMode = () => {
+  const path = window.location.pathname;
+  if (path.startsWith("/compass/ratm/requests/create")) return "create";
+  if (path.startsWith("/compass/ratm/queues/ViewRequestDetails")) return "view";
+  return "other";
+};
+
+const CountryRestrictions: React.FC<{schema: any}> = ({schema}) => {
+  const [form] = Form.useForm();
+  const [countryOptions, setCountryOptions] = useState<CountryOption[]>([]);
+  const [loadingCountries, setLoadingCountries] = useState<boolean>(false);
+
+  const countryRestrictions = useWatch("countryRestrictions", form) || [];
+
+  // PAGE MODE: "create" or "view"
+  const pageMode = getPageMode();
+
+  // Only load from storage if on view page
+  const localStorageValue =
+    pageMode === "view" ? localStorage.getItem("suppliedCountries") : null;
+
+  debugger;
+
+  // Initial form values
+  const initialValues =
+    pageMode === "view" && localStorageValue
+      ? {countryRestrictions: JSON.parse(localStorageValue)}
+      : {countryRestrictions: [{}]}; // create: one blank row
+
+  const handleValuesChange = (_: unknown, allValues: any) => {
+    const filtered = (allValues.countryRestrictions || []).filter(
+      (item: any) => item && Object.values(item).some(val => val !== null),
+    );
+    localStorage.setItem("suppliedCountries", JSON.stringify(filtered));
+  };
+
+  useEffect(() => {
+    const fetchCountriesList = async () => {
+      try {
+        setLoadingCountries(true);
+        const response = {
+          status: "OK",
+          message: "success",
+          data: {
+            options: [
+              {
+                key: "Afghanistan",
+                value: "Afghanistan",
+                embargoed: "Yes",
+                sanctioned: "Yes",
+                humanRights: "Yes",
+              },
+              {
+                key: "Albania",
+                value: "Albania",
+                embargoed: "",
+                sanctioned: "",
+                humanRights: "",
+              },
+              {
+                key: "Algeria",
+                value: "Algeria",
+                embargoed: "No",
+                sanctioned: "No",
+                humanRights: "Yes",
+              },
+              // ...add other countries as needed
+            ],
+          },
+        };
+        if (response?.status === "OK") {
+          setCountryOptions(
+            Array.isArray(response?.data?.options) ? response.data.options : [],
+          );
+        }
+      } catch (error) {
+        setCountryOptions([]);
+        console.error("Error fetching countries list:", error);
+      } finally {
+        setLoadingCountries(false);
+      }
+    };
+    fetchCountriesList();
+    if (localStorage.getItem("suppliedCountries")) {
+      localStorage.removeItem("suppliedCountries");
+    }
+  }, []);
+
+  // Helper: find country record by key
+  const findCountryByKey = (key: string) => {
+    return countryOptions.find(opt => opt.key === key);
+  };
+
+  // When a country is selected, set embargoed, sanctioned, humanRights
+  const onCountryChange = (countryKey: string, fieldName: number) => {
+    const countryObj = findCountryByKey(countryKey);
+    form.setFieldsValue({
+      countryRestrictions: countryRestrictions.map((item: any, idx: number) => {
+        if (idx === fieldName) {
+          return {
+            ...item,
+            embargoed: countryObj?.embargoed || undefined,
+            sanctioned: countryObj?.sanctioned || undefined,
+            humanRights: countryObj?.humanRights || undefined,
+            country: countryKey,
+          };
+        } else {
+          return item;
+        }
+      }),
+    });
+  };
+
+  // Disable add button unless all fields in the last row are filled
+  const isAddDisabled = () => {
+    if (!countryRestrictions || countryRestrictions.length === 0) return false;
+    const last = countryRestrictions[countryRestrictions.length - 1];
+    return !(
+      last &&
+      last.country &&
+      last.embargoed &&
+      last.sanctioned &&
+      last.humanRights
+    );
+  };
+
+  // Handle submit (save to localStorage and call onSubmit if provided)
+  const handleFinish = (values: {entities?: any}) => {
+    const suppliedCountries = (values.entities || []).filter(
+      (item: any) =>
+        item && Object.values(item).some(val => val !== null && val !== ""),
+    );
+    localStorage.setItem(
+      "suppliedCountries",
+      JSON.stringify(suppliedCountries),
+    );
+  };
+
+  return (
+    <Form
+      form={form}
+      layout="vertical"
+      name="dynamic_country_restrictions"
+      autoComplete="off"
+      initialValues={initialValues}
+      onFinish={handleFinish}
+      onValuesChange={handleValuesChange}>
+      <Form.List name="countryRestrictions">
+        {(fields, {add, remove}) => (
+          <>
+            {fields.map(({key, name, ...restField}, idx) => (
+              <Row gutter={12} key={key} align="middle" className="country-row">
+                <Col span={fields.length > 1 ? 23 : 24}>
+                  <Row gutter={12}>
+                    <Col span={12}>
+                      <Form.Item
+                        {...restField}
+                        name={[name, "country"]}
+                        label="Country"
+                        rules={[
+                          {required: true, message: "Please select a country"},
+                        ]}>
+                        <Select
+                          id="country_Select"
+                          aria-label="Select_Country"
+                          options={countryOptions.map(opt => ({
+                            label: opt.value,
+                            value: opt.key,
+                          }))}
+                          placeholder={
+                            loadingCountries
+                              ? "Loading countries..."
+                              : "Select country"
+                          }
+                          showSearch
+                          loading={loadingCountries}
+                          onChange={countryKey =>
+                            onCountryChange(countryKey, name)
+                          }
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item
+                        {...restField}
+                        name={[name, "embargoed"]}
+                        label="Embargoed"
+                        rules={[
+                          {required: true, message: "Select embargoed status"},
+                        ]}>
+                        <Select
+                          options={yesNoOptions}
+                          placeholder="Select"
+                          id="embargoed_Select"
+                          aria-label="Select_Embargoed"
+                          allowClear
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item
+                        {...restField}
+                        name={[name, "sanctioned"]}
+                        label="Sanctioned"
+                        rules={[
+                          {required: true, message: "Select sanctioned status"},
+                        ]}>
+                        <Select
+                          options={yesNoOptions}
+                          placeholder="Select"
+                          id="sanctioned_Select"
+                          aria-label="Select_Sanctioned"
+                          allowClear
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item
+                        {...restField}
+                        name={[name, "humanRights"]}
+                        label="Human Rights"
+                        rules={[
+                          {
+                            required: true,
+                            message: "Select human rights status",
+                          },
+                        ]}>
+                        <Select
+                          options={yesNoOptions}
+                          placeholder="Select"
+                          id="humanRights_Select"
+                          aria-label="Select_Human_Rights"
+                          allowClear
+                        />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                </Col>
+                {fields.length > 1 ? (
+                  <Col span={1}>
+                    <img
+                      loading="lazy"
+                      src={MinusCircleOutlined}
+                      alt="remove"
+                      className="custom-icon cursor-pointer"
+                      onClick={() => remove(name)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          remove(name);
+                        }
+                      }}
+                    />
+                  </Col>
+                ) : null}
+              </Row>
+            ))}
+            <Form.Item>
+              <Button
+                type="primary"
+                onClick={() => add()}
+                disabled={isAddDisabled()}
+                className="add-more-countries-button"
+                icon={
+                  <img
+                    loading="lazy"
+                    src={PlusCircleOutlined}
+                    alt="add items"
+                    className="custom-icon"
+                  />
+                }>
+                Add more countries
+              </Button>
+            </Form.Item>
+          </>
+        )}
+      </Form.List>
+    </Form>
+  );
+};
+
+export default CountryRestrictions;
+
+
